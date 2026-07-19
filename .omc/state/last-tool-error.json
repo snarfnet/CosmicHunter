@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"sleep 10; gh workflow list --repo snarfnet/CosmicHunter 2>&1; echo \\\"---trying run---\\\"; gh workflow run build.yml --repo snarfnet/CosmicHunter 2>&1\",\"timeout\":60000}",
-  "error": "Exit code 1\n---trying run---\nHTTP 404: workflow build.yml not found on the default branch (https://api.github.com/repos/snarfnet/CosmicHunter/actions/workflows/build.yml)",
-  "timestamp": "2026-07-19T06:36:25.082Z",
-  "retry_count": 1
-}
