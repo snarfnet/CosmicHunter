@@ -1,0 +1,63 @@
+name: cosmichunter-screenshots
+
+on:
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_* | sort -V | tail -1)/Contents/Developer"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Pick simulators
+        id: sims
+        run: |
+          IPHONE=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9] Pro Max" | head -1 | sed -E 's/.*\(([-0-9A-F]+)\).*/\1/')
+          IPAD=$(xcrun simctl list devices available | grep -E "iPad Pro 13|iPad Pro \(12.9" | head -1 | sed -E 's/.*\(([-0-9A-F]+)\).*/\1/')
+          echo "iphone=$IPHONE" >> $GITHUB_OUTPUT
+          echo "ipad=$IPAD" >> $GITHUB_OUTPUT
+
+      - name: Build for simulator
+        run: |
+          xcodebuild build \
+            -project CosmicHunter.xcodeproj \
+            -scheme CosmicHunter \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath $RUNNER_TEMP/dd \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Capture
+        run: |
+          APP=$(find $RUNNER_TEMP/dd -name "CosmicHunter.app" -type d | head -1)
+          mkdir -p shots
+          capture() {
+            local UDID=$1; local PREFIX=$2
+            xcrun simctl boot "$UDID" || true
+            sleep 8
+            xcrun simctl install "$UDID" "$APP"
+            for MODE in 1 2 3; do
+              xcrun simctl launch "$UDID" com.tokyonasu.CosmicHunter "SCREENSHOT_MODE_$MODE"
+              sleep 6
+              xcrun simctl io "$UDID" screenshot "shots/${PREFIX}_${MODE}.png"
+              xcrun simctl terminate "$UDID" com.tokyonasu.CosmicHunter || true
+              sleep 1
+            done
+            xcrun simctl shutdown "$UDID" || true
+          }
+          capture "${{ steps.sims.outputs.iphone }}" iphone_67
+          capture "${{ steps.sims.outputs.ipad }}" ipad_129
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/

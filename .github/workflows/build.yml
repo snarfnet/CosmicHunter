@@ -1,0 +1,61 @@
+name: cosmichunter-build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: cosmichunter-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_* | sort -V | tail -1)/Contents/Developer"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Set up ASC API Key
+        env:
+          ASC_API_KEY_CONTENT: ${{ secrets.ASC_API_KEY_CONTENT }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_WDXGY9WX55.p8
+          if echo "$ASC_API_KEY_CONTENT" | grep -q "BEGIN PRIVATE KEY"; then
+            echo "$ASC_API_KEY_CONTENT" > "$KEY_PATH"
+          else
+            echo "$ASC_API_KEY_CONTENT" | base64 --decode > "$KEY_PATH"
+          fi
+
+      - name: Archive
+        run: |
+          BUILD_NUM=$((GITHUB_RUN_NUMBER + 200))
+          xcodebuild archive \
+            -project CosmicHunter.xcodeproj \
+            -scheme CosmicHunter \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/CosmicHunter.xcarchive \
+            -destination "generic/platform=iOS" \
+            -allowProvisioningUpdates \
+            CURRENT_PROJECT_VERSION=$BUILD_NUM \
+            -authenticationKeyID WDXGY9WX55 \
+            -authenticationKeyIssuerID 2be0734f-943a-4d61-9dc9-5d9045c46fec \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_WDXGY9WX55.p8
+
+      - name: Export & Upload
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/CosmicHunter.xcarchive \
+            -exportOptionsPlist export_options.plist \
+            -exportPath $RUNNER_TEMP/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyID WDXGY9WX55 \
+            -authenticationKeyIssuerID 2be0734f-943a-4d61-9dc9-5d9045c46fec \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_WDXGY9WX55.p8
